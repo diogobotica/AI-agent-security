@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Business logic and interfaces. No Azure or Stripe SDK here (CLAUDE.md rule 2). -->
+  <PropertyGroup>
+    <RootNamespace>Platform.Core</RootNamespace>
+  </PropertyGroup>
+
+</Project>
