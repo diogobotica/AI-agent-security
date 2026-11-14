@@ -1,0 +1,25 @@
+# Tool settings for the mock agent. Dependencies are pinned in requirements.txt / requirements-dev.txt.
+[project]
+name = "mock-agent"
+version = "0.0.0"
+requires-python = ">=3.12"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 120
+extend-exclude = [".venv"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "S", "N", "ANN", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101"]
+
+[tool.mypy]
+strict = true
+python_version = "3.12"
+mypy_path = "src"
