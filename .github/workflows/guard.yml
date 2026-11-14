@@ -1,0 +1,67 @@
+# Same rules as the local hooks and the guardian agent, enforced on every pull request.
+# Installed by ai-agentic-workflow with its scripts in .github/guard/ (the agents' .claude/ folder isn't committed).
+# Before relying on it: pin each third-party action to a full commit SHA (supply-chain hygiene)
+# and check the versions below are still current.
+name: guard
+
+on:
+  pull_request:
+  push:
+    branches: [main, develop]
+  schedule:
+    - cron: "17 6 * * 1"   # every Monday: new advisories appear for unchanged dependencies
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Guard checks (protected paths, code rules, scanners present on the runner)
+        env:
+          CLAUDE_PROJECT_DIR: ${{ github.workspace }}
+          GUARD_POLICY: .github/guard/guard-policy.json
+        run: python .github/guard/guard_checks.py --base origin/${{ github.base_ref || 'main' }}
+
+  dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Scan dependencies against OSV (fails on high or critical)
+        env:
+          CLAUDE_PROJECT_DIR: ${{ github.workspace }}
+          SCAN_OUT_DIR: dependency-report
+        run: python .github/guard/scan_deps.py --fail-on high
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-report
+          path: dependency-report/
+
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  vulnerabilities:
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@v2.0.0
+    permissions:
+      contents: read
+      security-events: write
+      actions: read

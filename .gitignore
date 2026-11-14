@@ -1,0 +1,105 @@
+# Secrets and local config (never commit)
+.env
+.env.*
+!.env.example
+**/appsettings.*.local.json
+secrets/
+*.pem
+*.pfx
+*.p12
+*.key
+*.p8
+*.ppk
+*.jks
+*.keystore
+*.publishsettings
+id_rsa*
+id_ed25519*
+credentials.json
+service-account*.json
+*.kubeconfig
+.azure/
+.aws/
+
+# Client data: assessment evidence, transcripts and exports never go in the repo
+client-data/
+
+# Browser test sign-in state (holds session cookies)
+playwright/.auth/
+**/.auth/
+
+# Build output and dependencies
+bin/
+obj/
+node_modules/
+.next/
+out/
+dist/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+coverage/
+.coverage
+htmlcov/
+*.egg-info/
+TestResults/
+playwright-report/
+test-results/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!example.tfvars
+
+# Editors and OS
+.vs/
+*.user
+*.suo
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+Thumbs.db
+
+# Claude Code personal settings and worktrees
+.claude/settings.local.json
+.claude/worktrees/
+CLAUDE.local.md
+
+# Workflow installer (deleted after install)
+_install/
+
+# Story loop and release runtime state
+stories/.loop/
+stories/.release/
+
+# Pages regenerated from the .md files by board.py render
+stories/tracker.html
+stories/**/report.html
+stories/**/manual-test.html
+stories/security/dependencies.html
+
+# >>> flow workflow (managed by /flow:init; edit outside this block)
+# Workflow files: they stay in this folder but are never committed
+# (project planning, stories and checkpoints, and files the flow plugin manages)
+/.claude/
+/.workflow/
+/.githooks/
+/context/
+/stories/
+/CLAUDE.md
+/CLAUDE.local.md
+/CLAUDE.before-workflow.md
+/start.cmd
+# <<< flow workflow
