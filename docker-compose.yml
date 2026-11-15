@@ -1,0 +1,148 @@
+# Local development stack (US-102). Start it with:  python scripts/local_stack.py up
+#
+# - Every image is pinned by tag and digest; the API, worker and mock agent are built from this repository.
+# - Every published port binds to 127.0.0.1 only.
+# - Secrets come only from .env (git-ignored), which scripts/local_stack.py creates with random values.
+#   The ${VAR:?...} form stops compose with a clear message if .env is missing.
+# - The Ollama model name lives only in .env.example / .env (OLLAMA_MODEL).
+# - No anchors, aliases or merge keys: tests/repo reads this file with a small YAML reader.
+
+name: platform-local
+
+services:
+  postgres:
+    image: postgres:18.4-trixie@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?run python scripts/local_stack.py up to create .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run python scripts/local_stack.py up to create .env}
+      PLATFORM_APP_PASSWORD: ${PLATFORM_APP_PASSWORD:?run python scripts/local_stack.py up to create .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./infra/local/postgres/init:/docker-entrypoint-initdb.d:ro
+    ports:
+      # Host port 55432, not 5432, so it never clashes with a PostgreSQL installed on the developer's machine.
+      # Containers still reach it at postgres:5432.
+      - "127.0.0.1:55432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready --username \"$$POSTGRES_USER\" --dbname platform"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  azurite:
+    image: mcr.microsoft.com/azure-storage/azurite:3.37.0@sha256:830430c1da1a2d537e08f3e6764dd1f5ae00cf0346bcaf625b968ec3f0971fd5
+    command: ["azurite-blob", "--blobHost", "0.0.0.0", "--blobPort", "10000", "--location", "/data"]
+    environment:
+      AZURITE_ACCOUNTS: ${AZURITE_ACCOUNT_NAME:?run python scripts/local_stack.py up to create .env}:${AZURITE_ACCOUNT_KEY:?run python scripts/local_stack.py up to create .env}
+    volumes:
+      - azurite-data:/data
+    ports:
+      - "127.0.0.1:10000:10000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('net').connect(10000, '127.0.0.1').on('connect', () => process.exit(0)).on('error', () => process.exit(1))"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # SQL Server Developer edition, local only, for the Service Bus emulator (D-017; licence terms accepted by ACCEPT_EULA).
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-CU27-ubuntu-22.04@sha256:4402d880dd4c34bfa7d8705e56a86cd6c88da80a1f6bbbe741f999e76264a090
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?run python scripts/local_stack.py up to create .env}
+    healthcheck:
+      test: ["CMD-SHELL", "SQLCMDPASSWORD=\"$$MSSQL_SA_PASSWORD\" /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -C -b -Q 'SELECT 1' -o /dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
+
+  # Azure Service Bus emulator (D-017). Queues come from infra/local/servicebus/config.json.
+  servicebus:
+    image: mcr.microsoft.com/azure-messaging/servicebus-emulator:2.0.1@sha256:5a96d893b245031740f7d46e0fe5ff282d24b78c4b7d761dd57590f3f010a9b3
+    depends_on:
+      mssql:
+        condition: service_healthy
+    environment:
+      SQL_SERVER: mssql
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:?run python scripts/local_stack.py up to create .env}
+      ACCEPT_EULA: "Y"
+      SQL_WAIT_INTERVAL: "0"
+    volumes:
+      - ./infra/local/servicebus/config.json:/ServiceBus_Emulator/ConfigFiles/Config.json:ro
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:5300:5300"
+
+  ollama:
+    image: ollama/ollama:0.40.13@sha256:b2f0122c476bc9fe7ce679d8bb4bd555351e25e2554eefb156f61cb0a89cf429
+    volumes:
+      - ollama-models:/root/.ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Pulls the local model once into the shared models volume, then exits. Later runs find it already there.
+  ollama-init:
+    image: ollama/ollama:0.40.13@sha256:b2f0122c476bc9fe7ce679d8bb4bd555351e25e2554eefb156f61cb0a89cf429
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:?run python scripts/local_stack.py up to create .env}
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["ollama pull \"$$OLLAMA_MODEL\""]
+    restart: "no"
+
+  api:
+    build:
+      context: ./api
+    environment:
+      ENVIRONMENT: local
+    ports:
+      - "127.0.0.1:5080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_healthy
+      servicebus:
+        condition: service_started
+      ollama-init:
+        condition: service_completed_successfully
+
+  worker:
+    build:
+      context: ./worker
+    environment:
+      ENVIRONMENT: local
+    ports:
+      - "127.0.0.1:8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      azurite:
+        condition: service_healthy
+      servicebus:
+        condition: service_started
+      ollama-init:
+        condition: service_completed_successfully
+
+  # Deterministic test agent. It makes no outbound calls; it only answers requests on the compose network.
+  mock-agent:
+    build:
+      context: ./mock-agent
+    ports:
+      - "127.0.0.1:8002:8002"
+
+volumes:
+  postgres-data:
+  azurite-data:
+  ollama-models:
