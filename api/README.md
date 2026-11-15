@@ -18,7 +18,7 @@ The platform's .NET (LTS) backend: ASP.NET Core controllers, and later EF Core a
 cd api
 dotnet build Platform.slnx
 dotnet test Platform.slnx
-dotnet run --project src/Platform.Api      # http://localhost:5080/health -> {"status":"ok"}
+dotnet run --project src/Platform.Api      # http://127.0.0.1:5080/health -> {"status":"ok"}
 ```
 
 `GET /health` is an unversioned, anonymous liveness check. Its body is exactly `{"status":"ok"}`, with no version, environment or host details. Business endpoints will start under `/v1`.
