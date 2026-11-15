@@ -1,4 +1,5 @@
 using System.Net;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 
 namespace Platform.Api.Tests;
@@ -40,7 +41,17 @@ public sealed class EnvironmentSettingTests(WebApplicationFactory<Program> facto
         HttpStatusCode status;
         using (ProcessEnvironment(value))
         {
-            using var app = factory.WithWebHostBuilder(_ => { });
+            // US-103: azure mode needs its service settings at startup (see StartupSelectionTests).
+            var settings = value == "azure"
+                ? ExternalServices.ExternalServicesHarness.AzureSettings()
+                : new Dictionary<string, string?>();
+            using var app = factory.WithWebHostBuilder(builder =>
+            {
+                foreach (var (key, setting) in settings)
+                {
+                    builder.UseSetting(key, setting);
+                }
+            });
             using var client = app.CreateClient();
             using var response = await client.GetAsync("/health", cancellationToken);
             status = response.StatusCode;
