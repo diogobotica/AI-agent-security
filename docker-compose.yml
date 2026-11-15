@@ -110,6 +110,9 @@ services:
       # US-103: the local secret store reads SECRETS__<name>; the names are the defaults in appsettings.json.
       SECRETS__blob: ${AZURITE_CONNECTION_STRING:?run python scripts/local_stack.py up to create .env}
       SECRETS__bus: ${SERVICEBUS_CONNECTION_STRING:?run python scripts/local_stack.py up to create .env}
+      # US-103: the model gateway uses Ollama's OpenAI-compatible API; the model name comes only from .env.
+      ModelGateway__Endpoint: http://ollama:11434/v1/
+      ModelGateway__Model: ${OLLAMA_MODEL:?run python scripts/local_stack.py up to create .env}
     ports:
       - "127.0.0.1:5080:8080"
     depends_on:
