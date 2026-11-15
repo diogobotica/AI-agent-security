@@ -22,3 +22,11 @@ dotnet run --project src/Platform.Api      # http://127.0.0.1:5080/health -> {"s
 ```
 
 `GET /health` is an unversioned, anonymous liveness check. Its body is exactly `{"status":"ok"}`, with no version, environment or host details. Business endpoints will start under `/v1`.
+
+The API needs the `ENVIRONMENT` environment variable, set to `local` or `azure`. It refuses to start without one of them (D-018). For `dotnet run` the launch profile sets it to `local`.
+
+`GET /health/ready` checks the dependencies in parallel, with a short timeout: PostgreSQL, Blob (Azurite), Service Bus (emulator) and Ollama. Their addresses are in the `Dependencies` section of `appsettings.json`, and the defaults are the Docker Compose service names. It answers `200 {"status":"ready","checks":{...}}` or `503 {"status":"not-ready","checks":{...}}`, with `ok` or `unreachable` per check and no host names or error text. Outside Docker, the dependencies only resolve inside the compose stack, so readiness reports them unreachable.
+
+## Docker
+
+The API is built from `Dockerfile` (multi-stage, pinned .NET images, non-root user, port 8080). Run it as part of the local stack with `python scripts/local_stack.py up` from the repository root. It is published on http://127.0.0.1:5080. See the root `README.md`.
