@@ -5,7 +5,9 @@ using Platform.Core.External;
 using Platform.Infrastructure;
 using Platform.Infrastructure.Billing;
 using Platform.Infrastructure.Identity;
-using Platform.Infrastructure.Secrets;
+using Platform.Infrastructure.Messaging;
+using Platform.Infrastructure.SecretStores;
+using Platform.Infrastructure.Storage;
 
 namespace Platform.Api.ExternalServices;
 
@@ -49,6 +51,33 @@ public static class ExternalServicesRegistration
     {
         services.AddSingleton<ISecretStore, EnvironmentSecretStore>();
         services.AddSingleton<IIdentityProvider, MockIdentityProvider>();
+
+        // Azurite and the Service Bus emulator: connection strings come from the secret store on first use.
+        services.AddSingleton(provider => BlobClientFactory.FromSecret(
+            provider.GetRequiredService<ISecretStore>(),
+            Setting(provider, ExternalServicesOptions.BlobConnectionSecretKey),
+            ExternalServicesOptions.BlobConnectionSecretKey,
+            BlobContainer(provider)));
+        services.AddSingleton(provider => ServiceBusClientFactory.FromSecret(
+            provider.GetRequiredService<ISecretStore>(),
+            Setting(provider, ExternalServicesOptions.ServiceBusConnectionSecretKey),
+            ExternalServicesOptions.ServiceBusConnectionSecretKey));
+        AddStorageAndQueue(services);
+    }
+
+    private static void AddStorageAndQueue(IServiceCollection services)
+    {
+        services.AddSingleton<IEvidenceStore, BlobEvidenceStore>();
+        services.AddSingleton<IQueue, ServiceBusQueue>();
+    }
+
+    private static string? Setting(IServiceProvider provider, string key) =>
+        provider.GetRequiredService<IConfiguration>()[key];
+
+    private static string BlobContainer(IServiceProvider provider)
+    {
+        var configured = Setting(provider, ExternalServicesOptions.BlobContainerKey);
+        return string.IsNullOrWhiteSpace(configured) ? ExternalServicesOptions.DefaultBlobContainer : configured;
     }
 
     private static void AddAzure(IServiceCollection services)
@@ -69,5 +98,17 @@ public static class ExternalServicesRegistration
         services.AddSingleton<TokenCredential>(_ => new DefaultAzureCredential());
 
         services.AddSingleton<IIdentityProvider, EntraIdentityProvider>();
+
+        // Blob Storage and Service Bus with managed identity; no connection strings in Azure.
+        services.AddSingleton(provider => BlobClientFactory.FromIdentity(
+            Setting(provider, ExternalServicesOptions.BlobAccountUrlKey),
+            ExternalServicesOptions.BlobAccountUrlKey,
+            provider.GetRequiredService<TokenCredential>(),
+            BlobContainer(provider)));
+        services.AddSingleton(provider => ServiceBusClientFactory.FromIdentity(
+            Setting(provider, ExternalServicesOptions.ServiceBusNamespaceKey),
+            ExternalServicesOptions.ServiceBusNamespaceKey,
+            provider.GetRequiredService<TokenCredential>()));
+        AddStorageAndQueue(services);
     }
 }
