@@ -1,11 +1,14 @@
 using Azure.Core;
+using Azure.Core.Pipeline;
 using Azure.Identity;
+using Azure.Security.KeyVault.Secrets;
 using Microsoft.Extensions.Options;
 using Platform.Core.External;
 using Platform.Infrastructure;
 using Platform.Infrastructure.Billing;
 using Platform.Infrastructure.Identity;
 using Platform.Infrastructure.Messaging;
+using Platform.Infrastructure.ModelGateway;
 using Platform.Infrastructure.SecretStores;
 using Platform.Infrastructure.Storage;
 
@@ -18,6 +21,12 @@ namespace Platform.Api.ExternalServices;
 /// </summary>
 public static class ExternalServicesRegistration
 {
+    /// <summary>The named HttpClient behind the Key Vault client.</summary>
+    public const string KeyVaultHttpClientName = "keyvault";
+
+    /// <summary>The managed-identity scope for Azure AI Foundry (Azure OpenAI-compatible endpoints).</summary>
+    private const string FoundryTokenScope = "https://cognitiveservices.azure.com/.default";
+
     public static IServiceCollection AddExternalServices(
         this IServiceCollection services,
         DeploymentEnvironment environment,
@@ -27,6 +36,8 @@ public static class ExternalServicesRegistration
         ArgumentNullException.ThrowIfNull(configuration);
 
         services.AddHttpClient();
+        services.AddHttpClient(OpenAiCompatibleModelGateway.HttpClientName);
+        services.AddOptions<ModelGatewayOptions>().BindConfiguration(ModelGatewayOptions.Section);
 
         // Both environments.
         services.AddSingleton<IClock, SystemClock>();
@@ -63,6 +74,11 @@ public static class ExternalServicesRegistration
             Setting(provider, ExternalServicesOptions.ServiceBusConnectionSecretKey),
             ExternalServicesOptions.ServiceBusConnectionSecretKey));
         AddStorageAndQueue(services);
+
+        // Ollama: no Authorization header.
+        services.AddSingleton<IModelGateway>(provider => new OpenAiCompatibleModelGateway(
+            provider.GetRequiredService<IHttpClientFactory>(),
+            provider.GetRequiredService<IOptions<ModelGatewayOptions>>()));
     }
 
     private static void AddStorageAndQueue(IServiceCollection services)
@@ -110,5 +126,34 @@ public static class ExternalServicesRegistration
             ExternalServicesOptions.ServiceBusNamespaceKey,
             provider.GetRequiredService<TokenCredential>()));
         AddStorageAndQueue(services);
+
+        // Key Vault with managed identity. The HttpClient comes from IHttpClientFactory; no request is made until a
+        // secret is read or written.
+        services.AddSingleton(provider =>
+        {
+            var vault = Setting(provider, ExternalServicesOptions.KeyVaultUriKey);
+            if (!Uri.TryCreate(vault, UriKind.Absolute, out var vaultUri))
+            {
+                throw new InvalidOperationException($"Setting {ExternalServicesOptions.KeyVaultUriKey} must be an absolute URL.");
+            }
+
+            var transport = new HttpClientTransport(provider.GetRequiredService<IHttpClientFactory>().CreateClient(KeyVaultHttpClientName));
+            return new SecretClient(vaultUri, provider.GetRequiredService<TokenCredential>(), new SecretClientOptions { Transport = transport });
+        });
+        services.AddHttpClient(KeyVaultHttpClientName);
+        services.AddSingleton<ISecretStore, KeyVaultSecretStore>();
+
+        // Azure AI Foundry with a managed-identity token.
+        services.PostConfigure<ModelGatewayOptions>(options =>
+        {
+            if (string.IsNullOrWhiteSpace(options.TokenScope))
+            {
+                options.TokenScope = FoundryTokenScope;
+            }
+        });
+        services.AddSingleton<IModelGateway>(provider => new OpenAiCompatibleModelGateway(
+            provider.GetRequiredService<IHttpClientFactory>(),
+            provider.GetRequiredService<IOptions<ModelGatewayOptions>>(),
+            provider.GetRequiredService<TokenCredential>()));
     }
 }
