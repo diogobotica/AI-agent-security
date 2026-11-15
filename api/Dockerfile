@@ -8,6 +8,7 @@ WORKDIR /src
 # Restore first so the package layer is cached while only source files change.
 COPY global.json Directory.Build.props Directory.Packages.props ./
 COPY src/Platform.Core/Platform.Core.csproj src/Platform.Core/
+COPY src/Platform.Infrastructure/Platform.Infrastructure.csproj src/Platform.Infrastructure/
 COPY src/Platform.Api/Platform.Api.csproj src/Platform.Api/
 RUN dotnet restore src/Platform.Api/Platform.Api.csproj
 

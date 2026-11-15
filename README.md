@@ -74,6 +74,7 @@ The frontend runs outside Docker: `cd frontend && npm run dev`. Its home page sh
 - **"ports are not available" or "port is already allocated".** Another program uses one of the ports above. Stop that program, or find it with `netstat -ano | findstr :<port>` (Windows) or `lsof -i :<port>` (macOS and Linux).
 - **The Service Bus emulator restarts or reports errors at first.** It waits for SQL Server to be healthy, and SQL Server can take a minute on a cold start. The API and worker readiness checks show `servicebus: unreachable` until it is up. Wait, or run `python scripts/local_stack.py up` again.
 - **The model download fails or is slow.** Run `python scripts/local_stack.py up` again; it continues where it stopped. `docker compose logs ollama-init` shows progress.
+- **"required variable … is missing a value" after an update.** A newer `infra/local/env.template` added keys that your existing `.env` does not have (the script never changes an existing `.env`). Copy the new lines from the template to the end of `.env` and run `python scripts/local_stack.py up` again.
 - **Need new local passwords, or `.env` is broken.** Run `python scripts/local_stack.py reset`, delete `.env`, then run `python scripts/local_stack.py up`. It creates a new `.env`. The reset is needed because the database keeps the passwords it was first created with.
 - **An image download fails with "connection reset" or "EOF".** It's a network problem; run the command again.
 

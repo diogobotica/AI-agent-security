@@ -15,6 +15,14 @@ public sealed class ExternalServicesOptions
     public const string ModelEndpointKey = "ModelGateway:Endpoint";
     public const string ModelKey = "ModelGateway:Model";
 
+    // Local only: the names (not the values) of the secrets holding the emulators' connection strings.
+    public const string BlobConnectionSecretKey = "Services:Blob:ConnectionStringSecret";
+    public const string ServiceBusConnectionSecretKey = "Services:ServiceBus:ConnectionStringSecret";
+
+    // Both environments, with a default.
+    public const string BlobContainerKey = "Services:Blob:Container";
+    public const string DefaultBlobContainer = "evidence";
+
     /// <summary>The keys that must have a value in Azure, in the order they are reported.</summary>
     public static readonly IReadOnlyList<string> RequiredInAzure =
         [BlobAccountUrlKey, ServiceBusNamespaceKey, KeyVaultUriKey, ModelEndpointKey, ModelKey];
