@@ -33,6 +33,8 @@ bin/
 obj/
 node_modules/
 .next/
+*.tsbuildinfo
+next-env.d.ts
 out/
 dist/
 __pycache__/
@@ -90,9 +92,9 @@ stories/**/report.html
 stories/**/manual-test.html
 stories/security/dependencies.html
 
-# >>> flow workflow (managed by /flow:init; edit outside this block)
+# >>> ai-agentic-workflow (managed by workflow.cmd install; edit outside this block)
 # Workflow files: they stay in this folder but are never committed
-# (project planning, stories and checkpoints, and files the flow plugin manages)
+# (project planning, stories, checkpoints and the agents' mailboxes, and files workflow.cmd installs)
 /.claude/
 /.workflow/
 /.githooks/
@@ -101,5 +103,6 @@ stories/security/dependencies.html
 /CLAUDE.md
 /CLAUDE.local.md
 /CLAUDE.before-workflow.md
+/agent.cmd
 /start.cmd
-# <<< flow workflow
+# <<< ai-agentic-workflow

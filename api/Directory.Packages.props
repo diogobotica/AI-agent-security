@@ -1,0 +1,16 @@
+<Project>
+  <!--
+    Central package management: every NuGet version is pinned exactly here.
+    Test-only packages; versions are the newest stable releases at least 14 days old that target .NET 10
+    (Mvc.Testing follows the .NET 10 LTS runtime line). Approved by the founder on 2026-11-14 (see D-011).
+  -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.14" />
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
+    <PackageVersion Include="xunit.v3" Version="4.0.2" />
+  </ItemGroup>
+</Project>
