@@ -17,12 +17,15 @@ from __future__ import annotations
 
 import json
 import re
+import struct
 from pathlib import Path
 from typing import Any
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_FILE = "docker-compose.yml"
-ENV_EXAMPLE = ".env.example"
+ENV_TEMPLATE = "infra/local/env.template"  # D-019: no tracked file may be named .env or .env.*
 SERVICEBUS_CONFIG = "infra/local/servicebus/config.json"
 POSTGRES_INIT = "infra/local/postgres/init/01-app-role.sh"
 
@@ -298,6 +301,54 @@ def _dockerfile_stages(relative: str) -> list[tuple[str, str | None, list[str]]]
     return stages
 
 
+def _git_dir() -> Path:
+    dot_git = ROOT / ".git"
+    if dot_git.is_file():  # worktree or submodule: ".git" holds "gitdir: <path>"
+        target = dot_git.read_text(encoding="utf-8").strip().removeprefix("gitdir:").strip()
+        return (ROOT / target).resolve()
+    return dot_git
+
+
+def _tracked_paths() -> list[str]:
+    """Paths in git's index (what `git ls-files` lists), read from .git/index without running git.
+
+    Supports index versions 2, 3 and 4 (https://git-scm.com/docs/index-format).
+    """
+    index_path = _git_dir() / "index"
+    if not index_path.is_file():
+        pytest.skip("not a git checkout (no .git/index)")
+    data = index_path.read_bytes()
+    signature, version, count = struct.unpack(">4sLL", data[:12])
+    assert signature == b"DIRC" and version in (2, 3, 4), f"unexpected git index format {signature!r} v{version}"
+    paths: list[str] = []
+    position = 12
+    previous = b""
+    for _ in range(count):
+        start = position
+        (flags,) = struct.unpack(">H", data[position + 60 : position + 62])
+        position += 62
+        if version >= 3 and flags & 0x4000:
+            position += 2  # extended flags
+        if version == 4:
+            byte = data[position]
+            position += 1
+            strip = byte & 0x7F
+            while byte & 0x80:
+                byte = data[position]
+                position += 1
+                strip = ((strip + 1) << 7) | (byte & 0x7F)
+            end = data.index(b"\0", position)
+            name = previous[: len(previous) - strip] + data[position:end]
+            position = end + 1
+        else:
+            end = data.index(b"\0", position)
+            name = data[position:end]
+            position = start + ((end - start) // 8 + 1) * 8  # 1-8 NUL bytes pad each entry to 8 bytes
+        previous = name
+        paths.append(name.decode("utf-8", errors="replace"))
+    return paths
+
+
 def _active_gitignore_lines() -> list[str]:
     return [line.strip() for line in _read(".gitignore").splitlines() if line.strip() and not line.strip().startswith("#")]
 
@@ -472,31 +523,36 @@ def test_compose_has_no_literal_secrets() -> None:
     assert not problems, "; ".join(problems)
 
 
-def test_env_example_leaves_secrets_empty() -> None:
-    values = _dotenv(ENV_EXAMPLE)
+def test_env_template_leaves_secrets_empty() -> None:
+    values = _dotenv(ENV_TEMPLATE)
     secret_keys = [key for key in values if SECRET_NAME.search(key)]
-    assert secret_keys, f"{ENV_EXAMPLE} names no secret keys for the script to fill"
+    assert secret_keys, f"{ENV_TEMPLATE} names no secret keys for the script to fill"
     filled = [key for key in secret_keys if values[key]]
-    assert not filled, f"{ENV_EXAMPLE} must leave secret values empty: {', '.join(filled)}"
+    assert not filled, f"{ENV_TEMPLATE} must leave secret values empty: {', '.join(filled)}"
 
 
 def test_env_file_is_git_ignored() -> None:
     active = _active_gitignore_lines()
     assert any(line.removeprefix("/") == ".env" for line in active), ".gitignore does not ignore .env"
-    assert (ROOT / ENV_EXAMPLE).is_file(), f"{ENV_EXAMPLE} is missing"
-    ignores_env_variants = any(line.removeprefix("/") in (".env.*", ".env*") for line in active)
-    if ignores_env_variants:
-        assert any(line.removeprefix("/") == "!.env.example" for line in active), (
-            ".gitignore ignores .env.* but does not keep .env.example"
-        )
+    assert any(line.removeprefix("/") in (".env.*", ".env*") for line in active), ".gitignore does not ignore .env.*"
+    exceptions = [line for line in active if line.startswith("!") and ".env" in line]
+    assert not exceptions, f".gitignore must not re-include env files (D-019): {', '.join(exceptions)}"
+    assert (ROOT / ENV_TEMPLATE).is_file(), f"{ENV_TEMPLATE} is missing"
+
+
+def test_no_tracked_file_is_an_env_file() -> None:
+    # D-019: `.env` and `.env.*` are protected paths; the committed template is infra/local/env.template.
+    tracked = _tracked_paths()
+    env_files = sorted(path for path in tracked if re.fullmatch(r"\.env(\..*)?", path.rsplit("/", 1)[-1]))
+    assert not env_files, f"Tracked env files (rename the template to {ENV_TEMPLATE}): {', '.join(env_files)}"
 
 
 # --- Rule 3: model names ------------------------------------------------------------------------
 
 
-def test_model_name_only_in_env_example() -> None:
-    model = _dotenv(ENV_EXAMPLE).get("OLLAMA_MODEL", "")
-    assert model, f"{ENV_EXAMPLE} must set OLLAMA_MODEL"
+def test_model_name_only_in_env_template() -> None:
+    model = _dotenv(ENV_TEMPLATE).get("OLLAMA_MODEL", "")
+    assert model, f"{ENV_TEMPLATE} must set OLLAMA_MODEL"
     assert "${OLLAMA_MODEL" in _read(COMPOSE_FILE), f"{COMPOSE_FILE} must take the model from ${{OLLAMA_MODEL}}"
 
     offenders: list[str] = []
@@ -507,15 +563,15 @@ def test_model_name_only_in_env_example() -> None:
             parts = path.relative_to(ROOT).parts
             if not path.is_file() or IGNORED_PARTS.intersection(parts) or path.suffix.lower() == ".md":
                 continue
-            if path.name.startswith(".env"):
-                continue
+            if path.name.startswith(".env") or path == ROOT / ENV_TEMPLATE:
+                continue  # the template itself, and local untracked env files
             try:
                 text = path.read_text(encoding="utf-8")
             except UnicodeDecodeError:
                 continue
             if model in text:
                 offenders.append(path.relative_to(ROOT).as_posix())
-    assert not offenders, f"The model name appears outside {ENV_EXAMPLE}: {', '.join(offenders)}"
+    assert not offenders, f"The model name appears outside {ENV_TEMPLATE}: {', '.join(offenders)}"
 
 
 # --- Ports --------------------------------------------------------------------------------------

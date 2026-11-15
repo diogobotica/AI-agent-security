@@ -8,9 +8,9 @@ Contract the tests rely on:
 - `local_stack.ROOT` is the repository root (a `Path`), read when a command runs.
 - `local_stack.main(argv)` takes the arguments after the script name and returns the exit code.
 - Docker is called through `subprocess.run([...])` with an argument list starting `docker compose`.
-- `up` creates `ROOT/.env` from `ROOT/.env.example` when `.env` is missing: every key whose name
-  contains PASSWORD or SECRET or ends in KEY (or _KEY) and is empty in `.env.example` gets a random value;
-  other values are copied. An existing `.env` is never changed.
+- `up` creates `ROOT/.env` from the template `ROOT/infra/local/env.template` (D-019) when `.env` is missing:
+  every key whose name contains PASSWORD or SECRET or ends in KEY (or _KEY) and is empty in the template gets
+  a random value; other values are copied. An existing `.env` is never changed.
 """
 
 from __future__ import annotations
@@ -29,7 +29,8 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = REPO_ROOT / "scripts" / "local_stack.py"
 
-ENV_EXAMPLE_FIXTURE = """\
+ENV_TEMPLATE = Path("infra") / "local" / "env.template"
+ENV_TEMPLATE_FIXTURE = """\
 # Local stack settings (fixture)
 OLLAMA_MODEL=neutral-model-marker
 POSTGRES_USER=marker_user
@@ -82,8 +83,9 @@ def run_in(local_stack: ModuleType, monkeypatch: pytest.MonkeyPatch) -> Callable
 
 def _fresh_root(tmp_path: Path, name: str = "repo") -> Path:
     root = tmp_path / name
-    root.mkdir()
-    (root / ".env.example").write_text(ENV_EXAMPLE_FIXTURE, encoding="utf-8")
+    template = root / ENV_TEMPLATE
+    template.parent.mkdir(parents=True)
+    template.write_text(ENV_TEMPLATE_FIXTURE, encoding="utf-8")
     return root
 
 
@@ -106,7 +108,7 @@ def test_env_file_generated_with_random_secrets(
     run_in(first_root, ["up"])
     run_in(second_root, ["up"])
 
-    assert (first_root / ".env").is_file(), "up did not create .env from .env.example"
+    assert (first_root / ".env").is_file(), "up did not create .env from infra/local/env.template"
     first = _read_env(first_root / ".env")
     second = _read_env(second_root / ".env")
     assert first["OLLAMA_MODEL"] == "neutral-model-marker", "non-secret values must be copied unchanged"
