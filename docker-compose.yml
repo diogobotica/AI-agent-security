@@ -4,7 +4,7 @@
 # - Every published port binds to 127.0.0.1 only.
 # - Secrets come only from .env (git-ignored), which scripts/local_stack.py creates with random values.
 #   The ${VAR:?...} form stops compose with a clear message if .env is missing.
-# - The Ollama model name lives only in .env.example / .env (OLLAMA_MODEL).
+# - The Ollama model name lives only in infra/local/env.template / .env (OLLAMA_MODEL).
 # - No anchors, aliases or merge keys: tests/repo reads this file with a small YAML reader.
 
 name: platform-local

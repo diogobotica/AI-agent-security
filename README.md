@@ -45,7 +45,7 @@ The whole backend, with its local stand-ins for the Azure services, starts with 
 python scripts/local_stack.py up
 ```
 
-The first time, this creates `.env` from `.env.example` and fills every password and key with a new random value. `.env` is git-ignored and only ever holds throwaway local credentials. The command then builds the API, worker and mock agent, starts everything and waits until every service is healthy. On the first run it also downloads the local model (about 400 MB), which takes a few minutes. Later runs reuse it.
+The first time, this creates `.env` from the template `infra/local/env.template` and fills every password and key with a new random value. `.env` is git-ignored and only ever holds throwaway local credentials. The command then builds the API, worker and mock agent, starts everything and waits until every service is healthy. On the first run it also downloads the local model (about 400 MB), which takes a few minutes. Later runs reuse it.
 
 | Service | Address on your machine | What it is |
 | --- | --- | --- |
