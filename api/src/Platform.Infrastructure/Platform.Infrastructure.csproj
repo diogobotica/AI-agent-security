@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Implementations of the Platform.Core.External interfaces (US-103). Azure SDKs live here only, never in
+    Platform.Core (CLAUDE.md rule 2).
+  -->
+  <PropertyGroup>
+    <RootNamespace>Platform.Infrastructure</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Platform.Core\Platform.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.Identity" />
+  </ItemGroup>
+
+</Project>

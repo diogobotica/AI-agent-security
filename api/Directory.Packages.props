@@ -1,13 +1,15 @@
 <Project>
   <!--
     Central package management: every NuGet version is pinned exactly here.
-    Test-only packages; versions are the newest stable releases at least 14 days old that target .NET 10
-    (Mvc.Testing follows the .NET 10 LTS runtime line). Approved by the founder on 2026-11-14 (see D-011).
+    Versions are the newest stable releases at least 14 days old that target .NET 10.
+    Test packages (Mvc.Testing follows the .NET 10 LTS runtime line): approved by the founder on 2026-11-14 (D-011).
+    Azure SDKs (US-103): used only by Platform.Infrastructure, never by Platform.Core (rule 2).
   -->
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
   </PropertyGroup>
   <ItemGroup>
+    <PackageVersion Include="Azure.Identity" Version="1.21.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.14" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.11.0" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="4.0.1" />
