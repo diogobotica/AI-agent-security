@@ -1,9 +1,16 @@
+using Platform.Api;
+using Platform.Api.Health;
+
 var builder = WebApplication.CreateBuilder(args);
+
+// ENVIRONMENT (local or azure) chooses the external-service implementations; startup stops on any other value.
+var environment = EnvironmentSetting.Read();
 
 // Do not reveal the server software in responses.
 builder.WebHost.ConfigureKestrel(options => options.AddServerHeader = false);
 
 builder.Services.AddControllers();
+builder.Services.AddReadinessProbes(builder.Configuration, environment);
 
 var app = builder.Build();
 
