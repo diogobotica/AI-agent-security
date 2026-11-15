@@ -1,7 +1,6 @@
 # Secrets and local config (never commit)
 .env
 .env.*
-!.env.example
 **/appsettings.*.local.json
 secrets/
 *.pem

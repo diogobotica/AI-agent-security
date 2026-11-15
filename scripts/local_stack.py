@@ -5,7 +5,7 @@
     python scripts/local_stack.py down    # stops the stack, keeps the local data volumes
     python scripts/local_stack.py reset   # stops the stack and deletes the local data volumes
 
-`up` creates `.env` from `.env.example` when it is missing. Every empty value whose name contains PASSWORD or
+`up` creates `.env` from the template `infra/local/env.template` when it is missing. Every empty value whose name contains PASSWORD or
 SECRET, or ends in KEY, gets its own random value; everything else is copied unchanged. An existing `.env` is
 never changed. `.env` is git-ignored and holds local, throwaway credentials only.
 """
@@ -25,7 +25,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 ENV_FILE = ".env"
-ENV_EXAMPLE = ".env.example"
+# The committed template (D-019). No tracked file may be named .env or .env.*.
+ENV_TEMPLATE = Path("infra") / "local" / "env.template"
 SQL_SERVER_PASSWORD_KEY = "MSSQL_SA_PASSWORD"
 
 
@@ -62,16 +63,16 @@ def sql_server_password() -> str:
 
 
 def create_env_file(root: Path) -> bool:
-    """Create root/.env from root/.env.example if .env is missing. Returns True if it was created."""
+    """Create root/.env from the template root/infra/local/env.template if .env is missing. Returns True if created."""
     target = root / ENV_FILE
     if target.exists():
         return False
-    example = root / ENV_EXAMPLE
-    if not example.is_file():
-        raise FileNotFoundError(f"{ENV_EXAMPLE} is missing in {root}")
+    template = root / ENV_TEMPLATE
+    if not template.is_file():
+        raise FileNotFoundError(f"{ENV_TEMPLATE.as_posix()} is missing in {root}")
 
     lines: list[str] = []
-    for raw in example.read_text(encoding="utf-8").splitlines():
+    for raw in template.read_text(encoding="utf-8").splitlines():
         stripped = raw.strip()
         name, separator, value = stripped.partition("=")
         if stripped and not stripped.startswith("#") and separator and not value.strip() and is_secret_key(name.strip()):
@@ -91,7 +92,8 @@ def compose(*arguments: str) -> int:
     """Run `docker compose <arguments>` in the repository root and return its exit code."""
     command = ["docker", "compose", *arguments]
     try:
-        completed = subprocess.run(command, cwd=ROOT, check=False)  # noqa: S603 - fixed argument list, no shell
+        # Fixed argument list, no shell.
+        completed = subprocess.run(command, cwd=ROOT, check=False)
     except FileNotFoundError:
         print("docker was not found. Install Docker Desktop and make sure `docker` is on PATH.", file=sys.stderr)
         return 1
